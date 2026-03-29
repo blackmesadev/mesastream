@@ -1,0 +1,887 @@
+openapi: 3.1.0
+info:
+  title: mesastream API
+  version: 0.1.0
+  description: |
+    mesastream is the audio streaming microservice for Black Mesa.
+    It handles Discord voice transport, audio streaming, and queue/playlist persistence via Redis.
+
+    See `/ws` endpoint for real-time event broadcasting to WebSocket clients.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+tags:
+  - name: Health
+  - name: Players
+  - name: WebSocket
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness check
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+  /ready:
+    get:
+      tags: [Health]
+      summary: Readiness check (includes Redis readiness)
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '503':
+          description: Service is degraded/unready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+
+  /ws:
+    get:
+      tags: [WebSocket]
+      summary: WebSocket event stream
+      description: |
+        Opens a persistent WebSocket connection to receive real-time events from mesastream.
+        The server broadcasts events to all connected clients and sends periodic Ping frames (30s) for liveness detection.
+        This endpoint does NOT require Bearer authentication (runs on private network).
+      responses:
+        '101':
+          description: WebSocket connection established
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebSocketEvent'
+        '400':
+          description: Invalid WebSocket upgrade request
+
+  /players:
+    post:
+      tags: [Players]
+      summary: Create a persistent player resource
+      description: |
+        Called by Black Mesa after successfully joining a Discord voice channel.
+
+        **Guild-scoped behavior:**
+        - Only one active player is kept per guild.
+        - Creating a player for a guild will replace any existing player for that same guild.
+        - If a player already exists for the same `player_id`, it is replaced.
+        - Persisted queue/playlists are loaded from guild scope.
+
+        **Typical flow:**
+        1. Black Mesa calls `ws.join_voice_channel(guild_id, channel_id, user_id, options)`
+        2. Black Mesa receives `VoiceConnectionDetails` from Discord Gateway events
+        3. Black Mesa calls `VoiceConnectionDetails::into_bridge_payload()` to build the request body
+        4. Black Mesa calls this endpoint to create the mesastream player
+        5. mesastream runs the Discord Voice Gateway handshake and establishes the UDP transport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlayerRequest'
+      responses:
+        '201':
+          description: Player created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '503':
+          $ref: '#/components/responses/Error503'
+    get:
+      tags: [Players]
+      summary: List all players
+      responses:
+        '200':
+          description: Player list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlayerStateSnapshot'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+
+  /players/{id}:
+    get:
+      tags: [Players]
+      summary: Get player by ID
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      responses:
+        '200':
+          description: Player snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+    delete:
+      tags: [Players]
+      summary: Destroy player
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      responses:
+        '204':
+          description: Player destroyed
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /players/{id}/connection:
+    put:
+      tags: [Players]
+      summary: Update player voice connection details
+      description: |
+        Called by Black Mesa when Discord voice session changes are detected via VoiceSessionMonitor.
+
+        **Common scenarios:**
+        - `VoiceSessionChange::EndpointUpdated`: Discord rotated the voice server (maintenance/load balancing).
+          Black Mesa detects this via `ws.check_voice_session_change()` and calls this endpoint with the new
+          endpoint and token from `monitor.current_endpoint()` / `monitor.current_token()`.
+        - Session reconnection: After transient network issues or session invalidation, Black Mesa rejoins
+          the voice channel via `ws.join_voice_channel()` and updates mesastream with fresh connection details.
+
+        mesastream will:
+        1. Reconnect the UDP voice transport to the new endpoint
+        2. Resume audio streaming seamlessly (playback continues without interruption)
+        3. Cache the updated connection state in Redis
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateConnectionRequest'
+      responses:
+        '200':
+          description: Updated player snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '503':
+          $ref: '#/components/responses/Error503'
+
+  /players/{id}/queue:
+    post:
+      tags: [Players]
+      summary: Enqueue track URL
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnqueueRequest'
+      responses:
+        '200':
+          description: Updated player snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '422':
+          $ref: '#/components/responses/Error422'
+    get:
+      tags: [Players]
+      summary: Get queue for player (guild-scoped persistence)
+      description: |
+        Returns the queue for the addressed player.
+        Queue persistence is keyed by the player's `guild_id`, so queue state follows
+        the guild across channel/player-id changes.
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      responses:
+        '200':
+          description: Queue tracks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Track'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+    delete:
+      tags: [Players]
+      summary: Clear queue (guild-scoped persistence)
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      responses:
+        '200':
+          description: Updated player snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /players/{id}/playlists/{name}:
+    post:
+      tags: [Players]
+      summary: Save current queue as named playlist (guild-scoped)
+      description: |
+        Saves the current queue under `{name}` in guild scope.
+        Playlist names are unique per guild.
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+        - $ref: '#/components/parameters/PlaylistName'
+      responses:
+        '200':
+          description: Playlist saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaylistSnapshot'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /players/{id}/playlists/{name}/enqueue:
+    post:
+      tags: [Players]
+      summary: Load named playlist into queue (append, guild-scoped)
+      description: |
+        Loads playlist `{name}` from guild scope and appends its tracks to the
+        current queue.
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+        - $ref: '#/components/parameters/PlaylistName'
+      responses:
+        '200':
+          description: Updated player snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /players/{id}/play:
+    post:
+      tags: [Players]
+      summary: Start playback
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      responses:
+        '200':
+          description: Updated player snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+
+  /players/{id}/pause:
+    post:
+      tags: [Players]
+      summary: Pause playback
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      responses:
+        '200':
+          description: Updated player snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+
+  /players/{id}/resume:
+    post:
+      tags: [Players]
+      summary: Resume playback
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      responses:
+        '200':
+          description: Updated player snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+
+  /players/{id}/skip:
+    post:
+      tags: [Players]
+      summary: Skip current track
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      responses:
+        '200':
+          description: Updated player snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+
+  /players/{id}/stop:
+    post:
+      tags: [Players]
+      summary: Stop playback
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      responses:
+        '200':
+          description: Updated player snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+
+  /players/{id}/seek:
+    post:
+      tags: [Players]
+      summary: Seek playback position (best effort)
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SeekRequest'
+      responses:
+        '200':
+          description: Updated player snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+        '400':
+          $ref: '#/components/responses/Error400'
+
+  /players/{id}/volume:
+    post:
+      tags: [Players]
+      summary: Set playback volume multiplier
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VolumeRequest'
+      responses:
+        '200':
+          description: Updated player snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+        '400':
+          $ref: '#/components/responses/Error400'
+
+  /players/{id}/current:
+    get:
+      tags: [Players]
+      summary: Get currently playing track
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      responses:
+        '200':
+          description: Current track (or null)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Track'
+                  - type: 'null'
+
+  /players/{id}/status:
+    get:
+      tags: [Players]
+      summary: Get full player status
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      responses:
+        '200':
+          description: Player snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+
+  /players/{id}/equalizer:
+    post:
+      tags: [Players]
+      summary: Apply equalizer settings
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EqualizerRequest'
+      responses:
+        '200':
+          description: Updated player snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStateSnapshot'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: token
+
+  parameters:
+    PlayerId:
+      in: path
+      name: id
+      required: true
+      description: Discord voice channel ID (snowflake)
+      schema:
+        oneOf:
+          - type: string
+          - type: integer
+            format: int64
+    PlaylistName:
+      in: path
+      name: name
+      required: true
+      schema:
+        type: string
+
+  responses:
+    Error400:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Error401:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Error403:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Error404:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Error422:
+      description: Metadata parse failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Error503:
+      description: Service unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    StatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required: [code, message]
+
+    WebSocketEvent:
+      oneOf:
+        - $ref: '#/components/schemas/WSEventConnected'
+        - $ref: '#/components/schemas/WSEventPlayerCreated'
+        - $ref: '#/components/schemas/WSEventPlayerDestroyed'
+        - $ref: '#/components/schemas/WSEventTrackStarted'
+        - $ref: '#/components/schemas/WSEventTrackEnded'
+        - $ref: '#/components/schemas/WSEventVoiceDisconnected'
+        - $ref: '#/components/schemas/WSEventGoodbye'
+      discriminator:
+        propertyName: type
+
+    WSEventConnected:
+      type: object
+      properties:
+        type:
+          type: string
+          const: Connected
+      required: [type]
+      description: Sent to new clients on connection
+
+    WSEventPlayerCreated:
+      type: object
+      properties:
+        type:
+          type: string
+          const: PlayerCreated
+        guild_id:
+          oneOf:
+            - type: string
+            - type: integer
+              format: uint64
+        player_id:
+          oneOf:
+            - type: string
+            - type: integer
+              format: uint64
+        restored_queue_len:
+          type: integer
+          format: uint32
+        restored_position_ms:
+          type: integer
+          format: uint64
+      required: [type, guild_id, player_id, restored_queue_len, restored_position_ms]
+      description: Player was created
+
+    WSEventPlayerDestroyed:
+      type: object
+      properties:
+        type:
+          type: string
+          const: PlayerDestroyed
+        guild_id:
+          oneOf:
+            - type: string
+            - type: integer
+              format: uint64
+        player_id:
+          oneOf:
+            - type: string
+            - type: integer
+              format: uint64
+        was_stopped:
+          type: boolean
+      required: [type, guild_id, player_id, was_stopped]
+      description: Player was destroyed
+
+    WSEventTrackStarted:
+      type: object
+      properties:
+        type:
+          type: string
+          const: TrackStarted
+        guild_id:
+          oneOf:
+            - type: string
+            - type: integer
+              format: uint64
+        player_id:
+          oneOf:
+            - type: string
+            - type: integer
+              format: uint64
+        track:
+          $ref: '#/components/schemas/Track'
+        position_ms:
+          type: integer
+          format: uint64
+      required: [type, guild_id, player_id, track, position_ms]
+      description: Track playback began
+
+    WSEventTrackEnded:
+      type: object
+      properties:
+        type:
+          type: string
+          const: TrackEnded
+        guild_id:
+          oneOf:
+            - type: string
+            - type: integer
+              format: uint64
+        player_id:
+          oneOf:
+            - type: string
+            - type: integer
+              format: uint64
+        track_id:
+          type: string
+          format: uuid
+      required: [type, guild_id, player_id, track_id]
+      description: Track playback finished
+
+    WSEventVoiceDisconnected:
+      type: object
+      properties:
+        type:
+          type: string
+          const: VoiceDisconnected
+        guild_id:
+          oneOf:
+            - type: string
+            - type: integer
+              format: uint64
+        player_id:
+          oneOf:
+            - type: string
+            - type: integer
+              format: uint64
+        reason:
+          type: string
+      required: [type, guild_id, player_id, reason]
+      description: Voice transport lost — client should leave/rejoin for fresh credentials
+
+    WSEventGoodbye:
+      type: object
+      properties:
+        type:
+          type: string
+          const: Goodbye
+      required: [type]
+      description: Server shutting down — client should reconnect
+
+    EqualizerRequest:
+      type: object
+      properties:
+        bands:
+          type: object
+          description: Frequency band adjustments (key is band ID, value is dB adjustment)
+      required: [bands]
+
+    VoiceBridgePayloadDto:
+      description: |
+        All Discord voice session fields needed by mesastream to connect.
+        Built by Black Mesa via `VoiceConnectionDetails::into_bridge_payload()`.
+      type: object
+      properties:
+        guild_id:
+          oneOf:
+            - type: string
+            - type: integer
+              format: uint64
+        player_id:
+          description: Identifies the player; equals channel_id by convention.
+          oneOf:
+            - type: string
+            - type: integer
+              format: uint64
+        channel_id:
+          oneOf:
+            - type: string
+            - type: integer
+              format: uint64
+        user_id:
+          oneOf:
+            - type: string
+            - type: integer
+              format: uint64
+        session_id:
+          type: string
+        token:
+          type: string
+        endpoint:
+          type: string
+        gateway_url:
+          type: string
+          description: Full WSS URL for the Discord Voice Gateway, e.g. `wss://endpoint/?v=4&encoding=json`
+      required: [guild_id, player_id, channel_id, user_id, session_id, token, endpoint, gateway_url]
+
+    CreatePlayerRequest:
+      allOf:
+        - $ref: '#/components/schemas/VoiceBridgePayloadDto'
+
+    UpdateConnectionRequest:
+      allOf:
+        - $ref: '#/components/schemas/VoiceBridgePayloadDto'
+
+    EnqueueRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+      required: [url]
+
+    SeekRequest:
+      type: object
+      properties:
+        position_ms:
+          type: integer
+          format: uint64
+          minimum: 0
+      required: [position_ms]
+
+    VolumeRequest:
+      type: object
+      properties:
+        volume:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 2
+      required: [volume]
+
+    SourceKind:
+      type: string
+      enum: [youtube, soundcloud]
+
+    PlayerPlaybackStatus:
+      type: string
+      enum: [idle, playing, paused, stopped]
+
+    TrackMetadata:
+      type: object
+      properties:
+        artist:
+          type: string
+        title:
+          type: string
+        duration_ms:
+          type: integer
+          format: uint64
+        url:
+          type: string
+      required: [artist, title, duration_ms, url]
+
+    Track:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source:
+          $ref: '#/components/schemas/SourceKind'
+        source_url:
+          type: string
+        stream_url:
+          type: string
+        metadata:
+          $ref: '#/components/schemas/TrackMetadata'
+        cached:
+          type: boolean
+        cache_key:
+          oneOf:
+            - type: string
+            - type: 'null'
+      required: [id, source, source_url, stream_url, metadata, cached]
+
+    PlayerStateSnapshot:
+      type: object
+      properties:
+        player_id:
+          description: Discord voice channel ID (snowflake)
+          oneOf:
+            - type: string
+            - type: integer
+              format: int64
+        connection:
+          $ref: '#/components/schemas/VoiceBridgePayloadDto'
+        status:
+          $ref: '#/components/schemas/PlayerPlaybackStatus'
+        queue:
+          type: array
+          items:
+            $ref: '#/components/schemas/Track'
+        current_track:
+          oneOf:
+            - $ref: '#/components/schemas/Track'
+            - type: 'null'
+        position_ms:
+          type: integer
+          format: uint64
+        volume:
+          type: number
+          format: float
+        voice_connected:
+          type: boolean
+          description: Whether the player's voice transport to Discord is currently connected
+      required:
+        - player_id
+        - connection
+        - status
+        - queue
+        - position_ms
+        - volume
+        - voice_connected
+
+    PlaylistSnapshot:
+      type: object
+      properties:
+        player_id:
+          description: Discord voice channel ID (snowflake)
+          oneOf:
+            - type: string
+            - type: integer
+              format: int64
+        name:
+          type: string
+        tracks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Track'
+      required: [player_id, name, tracks]
