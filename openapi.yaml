@@ -435,18 +435,28 @@ paths:
   /players/{id}/current:
     get:
       tags: [Players]
-      summary: Get currently playing track
+      summary: Get currently playing track with position info
+      description: |
+        Returns detailed playback state for the current track including position,
+        duration, and remaining time as both millisecond integers and formatted
+        `MM:SS` strings.  Returns `null` when no track is playing.
       parameters:
         - $ref: '#/components/parameters/PlayerId'
       responses:
         '200':
-          description: Current track (or null)
+          description: Current track with position, or null if idle
           content:
             application/json:
               schema:
                 oneOf:
-                  - $ref: '#/components/schemas/Track'
+                  - $ref: '#/components/schemas/CurrentTrackResponse'
                   - type: 'null'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
 
   /players/{id}/status:
     get:
@@ -705,13 +715,77 @@ components:
       required: [type]
       description: Server shutting down — client should reconnect
 
+    EqualizerSettings:
+      type: object
+      description: Resolved 3-band equalizer state as stored in the player snapshot.
+      properties:
+        bass:
+          type: number
+          format: float
+          description: Low-frequency gain multiplier.
+        mid:
+          type: number
+          format: float
+          description: Mid-frequency gain multiplier.
+        treble:
+          type: number
+          format: float
+          description: High-frequency gain multiplier.
+      required: [bass, mid, treble]
+
+    CurrentTrackResponse:
+      type: object
+      description: Currently playing track with live position information.
+      properties:
+        track:
+          $ref: '#/components/schemas/Track'
+        position_ms:
+          type: integer
+          format: uint64
+          description: Current playback position in milliseconds.
+        duration_ms:
+          type: integer
+          format: uint64
+          description: Total track duration in milliseconds.
+        position:
+          type: string
+          description: Formatted current position (e.g. `"3:42"` or `"1:03:42"`).
+        duration:
+          type: string
+          description: Formatted total duration.
+        remaining:
+          type: string
+          description: Formatted remaining playback time.
+      required: [track, position_ms, duration_ms, position, duration, remaining]
+
     EqualizerRequest:
       type: object
+      description: |
+        3-band equalizer multipliers. Each band is a float in `[0.0, 2.0]` where `1.0` is
+        unity gain (flat / bypass).  Sent as a flattened JSON object (no wrapper key).
       properties:
-        bands:
-          type: object
-          description: Frequency band adjustments (key is band ID, value is dB adjustment)
-      required: [bands]
+        bass:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 2
+          default: 1.0
+          description: Low-frequency gain multiplier (< 250 Hz).
+        mid:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 2
+          default: 1.0
+          description: Mid-frequency gain multiplier (250 Hz – 4000 Hz).
+        treble:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 2
+          default: 1.0
+          description: High-frequency gain multiplier (> 4000 Hz).
+      required: [bass, mid, treble]
 
     VoiceBridgePayloadDto:
       description: |
@@ -814,27 +888,27 @@ components:
         id:
           type: string
           format: uuid
+          description: UUID assigned by mesastream when the track is enqueued.
         source:
           $ref: '#/components/schemas/SourceKind'
         source_url:
           type: string
+          description: Original URL submitted by the caller.
         stream_url:
           type: string
+          description: Resolved direct audio stream URL (may be a CDN URL or signed link).
         metadata:
           $ref: '#/components/schemas/TrackMetadata'
-        cached:
-          type: boolean
-        cache_key:
-          oneOf:
-            - type: string
-            - type: 'null'
-      required: [id, source, source_url, stream_url, metadata, cached]
+        error:
+          type: [string, 'null']
+          description: Error message if this track failed to play during playback.
+      required: [id, source, source_url, stream_url, metadata]
 
     PlayerStateSnapshot:
       type: object
       properties:
         player_id:
-          description: Discord voice channel ID (snowflake)
+          description: Discord guild ID (snowflake). One player per guild.
           oneOf:
             - type: string
             - type: integer
@@ -851,15 +925,24 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Track'
             - type: 'null'
+          description: The track currently being played, or `null` if idle.
         position_ms:
           type: integer
           format: uint64
+          description: Current playback position in milliseconds.
         volume:
           type: number
           format: float
+          description: Current volume multiplier in `[0.0, 2.0]`.
+        equalizer:
+          $ref: '#/components/schemas/EqualizerSettings'
         voice_connected:
           type: boolean
-          description: Whether the player's voice transport to Discord is currently connected
+          description: Whether the player's UDP voice transport to Discord is currently connected.
+        playback_session_id:
+          type: [string, 'null']
+          format: uuid
+          description: Session ID for telemetry correlation. Present while a track is actively playing.
       required:
         - player_id
         - connection
@@ -867,6 +950,7 @@ components:
         - queue
         - position_ms
         - volume
+        - equalizer
         - voice_connected
 
     PlaylistSnapshot:
