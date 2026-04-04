@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libopus-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ./lib /app/lib
+# COPY ./lib /app/lib
+
 COPY ./mesastream/Cargo.toml ./mesastream/Cargo.lock ./
 COPY ./mesastream/src/main.rs ./src/main.rs
 
