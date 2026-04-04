@@ -74,10 +74,10 @@ sequenceDiagram
 | `PORT` | No | `8080` | HTTP listen port. |
 | `YT_DLP_PATH` | No | `yt-dlp` | Path to yt-dlp executable. |
 | `YT_DLP_COOKIES` | No | unset | Optional cookies file path for yt-dlp. |
-| `FFMPEG_BITRATE_KBPS` | No | `128` | Opus encode bitrate in kbps. |
+| `ENCODING_BITRATE` | No | `128` | Opus encode bitrate in kbps. |
 | `AUDIO_CACHE_PATH` | No | `/var/cache/mesastream/audio` | On-disk audio cache directory. |
 | `AUDIO_CACHE_TTL_SECS` | No | `604800` | Cache metadata TTL in seconds. |
 | `SOURCE_STREAM_CHANNEL_CAPACITY` | No | `16` | Source stream channel capacity. |
 | `CACHE_WRITER_BUFFER_BYTES` | No | `196608` | Cache write buffer size. |
 | `CACHE_READER_BUFFER_BYTES` | No | `65536` | Cache read buffer size. |
-| `RUST_LOG` | No | logger default | Rust log filter (for example `info,mesastream=debug`). |
+

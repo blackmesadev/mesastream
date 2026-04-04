@@ -21,7 +21,7 @@ use crate::{
     audio::{reader::TrackReader, AudioPipeline, EncoderProgress, PlaybackEffects},
     cache::RedisCache,
     config::Settings,
-    discord_transport::DiscordTransport,
+    discord::DiscordTransport,
     errors::{AppError, AppResult},
     models::{
         format_duration_ms, CurrentTrackResponse, EqualizerSettings, PlayerPlaybackStatus,
@@ -154,7 +154,7 @@ impl Player {
         self.current_frame.load(Ordering::Relaxed) * OPUS_FRAME_DURATION_MS
     }
 
-    /// Set playback position — converts ms to a frame offset and stores it.
+    /// Set playback position - converts ms to a frame offset and stores it.
     fn set_position_ms(&self, ms: u64) {
         self.current_frame
             .store(ms / OPUS_FRAME_DURATION_MS, Ordering::Relaxed);
@@ -244,7 +244,7 @@ impl PlayerManager {
 
     /// Best-effort broadcast of a player event to connected WS clients.
     fn emit(&self, event: bm_lib::model::mesastream::MesastreamEvent) {
-        // Ignore send errors — just means no one is listening right now.
+        // Ignore send errors - just means no one is listening right now.
         let _ = self.event_tx.send(event);
     }
 
@@ -354,7 +354,7 @@ impl PlayerManager {
     ) -> AppResult<PlayerStateSnapshot> {
         // Called by Black Mesa when Discord voice session changes are detected:
         // - VoiceSessionChange::EndpointUpdated: Discord rotated voice server (maintenance/load balancing)
-        //   Black Mesa calls this with a new VoiceBridgePayloadDto built from the updated endpoint.
+        // Black Mesa calls this with a new VoiceBridgePayloadDto built from the updated endpoint.
         // - Session reconnection: after network issues, Black Mesa rejoins and sends a fresh payload.
         //
         // Mesastream re-runs the voice gateway handshake and replaces the UDP transport
@@ -479,7 +479,7 @@ impl PlayerManager {
         // using the stored connection info before starting playback.
         if !player.transport.load().is_connected() {
             let connection = player.state.read().await.connection.clone();
-            info!(player_id = %player_id, "transport disconnected — reconnecting before play");
+            info!(player_id = %player_id, "transport disconnected - reconnecting before play");
             match DiscordTransport::connect(&connection).await {
                 Ok(transport) => {
                     player.transport.store(Arc::new(transport));
@@ -707,7 +707,7 @@ impl PlayerManager {
         self.cache
             .set_queue_snapshot(guild_id, &snapshot.queue)
             .await;
-        info!(player_id = %player_id, queue_len = snapshot.queue.len(), "player destroyed — queue persisted");
+        info!(player_id = %player_id, queue_len = snapshot.queue.len(), "player destroyed - queue persisted");
 
         self.emit(
             bm_lib::model::mesastream::MesastreamEvent::PlayerDestroyed {
@@ -855,7 +855,7 @@ impl PlayerManager {
                                 file_size,
                                 min_expected_bytes,
                                 duration_ms,
-                                "cache file appears truncated — deleting and re-encoding"
+                                "cache file appears truncated - deleting and re-encoding"
                             );
                             let _ = tokio::fs::remove_file(&final_path).await;
                             None
@@ -866,19 +866,19 @@ impl PlayerManager {
                         Some(0)
                     }
                 }
-                None => None, // metadata expired — treat as uncached
+                None => None, // metadata expired - treat as uncached
             }
         } else {
             None
         };
 
         if let Some(duration_ms) = cached_duration_ms {
-            // Fully cached — progress pre-completed so reader streams immediately
+            // Fully cached - progress pre-completed so reader streams immediately
             let total_frames = duration_ms / OPUS_FRAME_DURATION_MS;
             let progress = Arc::new(EncoderProgress::completed(total_frames));
             Ok((final_path, progress, reader_cancel))
         } else {
-            // Not cached — get stream, encode to .opus, reader follows encoder
+            // Not cached - get stream, encode to .opus, reader follows encoder
             let _ = tokio::fs::remove_file(&final_path).await;
 
             let byte_stream = self.sources.get_stream(&track_url).await.map_err(|_| {
@@ -986,8 +986,8 @@ impl PlayerManager {
     /// Combines the former reader, discord_sender, and await_track into a
     /// single async loop that ticks every 20ms:
     ///
-    ///   tick → read opus frame → check seek/pause/skip/stop →
-    ///   apply volume/EQ if enabled → send to Discord (DAVE + UDP)
+    /// tick → read opus frame → check seek/pause/skip/stop →
+    /// apply volume/EQ if enabled → send to Discord (DAVE + UDP)
     ///
     /// No `spawn_blocking`, no mpsc channel, no spin-waits.
     async fn play_track(
@@ -1034,7 +1034,7 @@ impl PlayerManager {
         let health_check_interval = Duration::from_secs(5);
 
         loop {
-            // Stop or skip requested — break to outer loop to handle cleanup or next track setup
+            // Stop or skip requested - break to outer loop to handle cleanup or next track setup
             if player.stop_requested.load(Ordering::Relaxed) {
                 cancel.store(true, Ordering::Relaxed);
                 progress.cancelled.store(true, Ordering::Relaxed);
@@ -1047,19 +1047,19 @@ impl PlayerManager {
                 break;
             }
 
-            // Pause requested — async wait until unpaused.  Zero CPU while paused.
+            // Pause requested - async wait until unpaused.  Zero CPU while paused.
             if player.paused.load(Ordering::Relaxed) {
                 if speaking {
                     transport.set_speaking(false);
                     speaking = false;
                 }
-                // Async wait — zero CPU while paused
+                // Async wait - zero CPU while paused
                 player.notify.notified().await;
                 ticker.reset();
                 continue;
             }
 
-            // Seek requested — update reader position and reset ticker to avoid burst of frames after long seek
+            // Seek requested - update reader position and reset ticker to avoid burst of frames after long seek
             if let Some(seek_ms) = player.seek_requested_ms.lock().await.take() {
                 debug!(position_ms = seek_ms, "seek_started");
                 track_reader.seek_to_ms(seek_ms);
@@ -1078,7 +1078,7 @@ impl PlayerManager {
                         speaking = false;
                     }
                     let guild_id = player.state.read().await.connection.guild_id;
-                    warn!(player_id = %player.id, %guild_id, "voice transport disconnected — emitting VoiceDisconnected");
+                    warn!(player_id = %player.id, %guild_id, "voice transport disconnected - emitting VoiceDisconnected");
                     self.emit(
                         bm_lib::model::mesastream::MesastreamEvent::VoiceDisconnected {
                             guild_id,
@@ -1109,7 +1109,7 @@ impl PlayerManager {
                             break;
                         }
                         if tokio::time::Instant::now() >= deadline {
-                            error!(player_id = %player.id, "voice transport recovery timed out after 60s — stopping playback");
+                            error!(player_id = %player.id, "voice transport recovery timed out after 60s - stopping playback");
                             player.stop_requested.store(true, Ordering::Relaxed);
                             if speaking {
                                 transport.set_speaking(false);
@@ -1168,14 +1168,14 @@ impl PlayerManager {
 
             let Some(track) = player.pop_next_track().await else {
                 if tracks_played > 0 {
-                    // Queue drained after playing at least one track — auto-destroy
+                    // Queue drained after playing at least one track - auto-destroy
                     // the player to free resources.  The Discord voice connection
                     // stays open (managed by Black Mesa).  Queue & position are
                     // persisted in Redis so the next `create_player` restores them.
-                    info!(player_id = %player.id, tracks_played, "queue empty after playback — auto-destroying player");
+                    info!(player_id = %player.id, tracks_played, "queue empty after playback - auto-destroying player");
                     break;
                 }
-                // No track has been played yet (player just created) — wait
+                // No track has been played yet (player just created) - wait
                 // for enqueue (woken by notify) rather than polling.
                 player.set_position_ms(0);
                 player.notify.notified().await;
@@ -1200,7 +1200,7 @@ impl PlayerManager {
                 Err(_) => continue,
             };
 
-            // Runs outside the init span — won't hold it open for the track's duration
+            // Runs outside the init span - won't hold it open for the track's duration
             self.play_track(&player, cache_path, progress, cancel, init_seek)
                 .await;
 
@@ -1216,7 +1216,7 @@ impl PlayerManager {
                 });
 
                 // Persist updated queue (track was just popped) but skip full snapshot
-                // to avoid a Redis write per track — snapshot is written on destroy.
+                // to avoid a Redis write per track - snapshot is written on destroy.
                 let queue: Vec<Track> = player.state.read().await.queue.iter().cloned().collect();
                 self.cache.set_queue_snapshot(guild_id, &queue).await;
             }
@@ -1296,7 +1296,7 @@ async fn cleanup_orphaned_cache_files(cache: &RedisCache, cache_path: &str) -> A
 
         // If metadata expired in Redis, remove the orphaned cache file
         if cache.get_cache_metadata(cache_key).await.is_none() {
-            // Metadata expired — remove the orphaned file
+            // Metadata expired - remove the orphaned file
             if let Err(e) = tokio::fs::remove_file(&path).await {
                 error!(error = %e, cache_key = %cache_key, "failed to remove orphaned cache file");
             } else {

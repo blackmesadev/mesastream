@@ -1,11 +1,3 @@
-//! Cache file I/O for the `[u16 LE size][opus data]` frame format.
-//!
-//! `CacheWriter` wraps a `BufWriter` and tracks flushed frame count via
-//! `EncoderProgress` so the reader can safely follow the writer in real time.
-//!
-//! `CacheReader` wraps a `BufReader` and provides seeking by frame index
-//! plus batched reads for the effects pipeline.
-
 use std::io::{BufReader, BufWriter, Read, Seek, Write};
 use std::path::Path;
 

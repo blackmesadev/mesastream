@@ -13,7 +13,7 @@ pub struct Settings {
     pub otlp_organization: Option<String>,
     pub port: u16,
     pub yt_dlp_path: String,
-    pub ffmpeg_bitrate_kbps: u32,
+    pub encoding_bitrate: u32,
     /// Directory where transcoded opus frames are cached on disk.
     pub audio_cache_path: String,
     /// TTL for cached audio metadata in Redis (in seconds). When metadata expires,
@@ -48,7 +48,7 @@ impl Settings {
             .and_then(|value| value.parse::<u16>().ok())
             .unwrap_or(8080);
 
-        let ffmpeg_bitrate_kbps = env::var("FFMPEG_BITRATE_KBPS")
+        let encoding_bitrate = env::var("ENCODING_BITRATE")
             .ok()
             .and_then(|value| value.parse::<u32>().ok())
             .unwrap_or(128);
@@ -77,7 +77,7 @@ impl Settings {
             otlp_organization,
             port,
             yt_dlp_path: env::var("YT_DLP_PATH").unwrap_or_else(|_| "yt-dlp".to_string()),
-            ffmpeg_bitrate_kbps,
+            encoding_bitrate,
             audio_cache_path: env::var("AUDIO_CACHE_PATH")
                 .unwrap_or_else(|_| "/var/cache/mesastream/audio".to_string()),
             audio_cache_ttl_secs: env::var("AUDIO_CACHE_TTL_SECS")

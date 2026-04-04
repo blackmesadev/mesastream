@@ -67,7 +67,7 @@ impl SourceRegistry {
         }
     }
 
-    /// Resolve metadata only — called at enqueue time.
+    /// Resolve metadata only - called at enqueue time.
     #[instrument(skip(self), fields(url = url))]
     pub async fn resolve_metadata(&self, url: &str) -> AppResult<ResolvedMetadata> {
         let result = match self.route_source(url) {
@@ -85,7 +85,7 @@ impl SourceRegistry {
         result
     }
 
-    /// Start streaming — called at play time.
+    /// Start streaming - called at play time.
     /// Returns an async byte stream that delivers audio data as it downloads.
     #[instrument(skip(self), fields(url = url))]
     pub async fn get_stream(&self, url: &str) -> AppResult<ByteStream> {

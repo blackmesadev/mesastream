@@ -1,11 +1,3 @@
-//! Cache-following playback reader (async).
-//!
-//! Provides `TrackReader` — a thin async wrapper around `CacheReader` that
-//! waits for the cache file to appear and for the encoder to produce frames
-//! without busy-waiting. The actual 20ms tick loop lives in `player.rs`;
-//! `TrackReader` just answers "give me the next frame" or "wait, encoder
-//! hasn't written that far yet".
-
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -20,7 +12,7 @@ use super::{
 
 /// Async-friendly cache reader for a single track.
 ///
-/// Wraps `CacheReader` (sync file I/O — sub-microsecond for buffered local
+/// Wraps `CacheReader` (sync file I/O - sub-microsecond for buffered local
 /// reads) and `EncoderProgress` (for uncached tracks where the encoder is
 /// still writing).
 pub struct TrackReader {
@@ -44,7 +36,7 @@ impl TrackReader {
         bitrate_kbps: u32,
         cache_reader_buffer_bytes: usize,
     ) -> Option<Self> {
-        // Wait for the file — polls every 20ms (one frame period) using async sleep.
+        // Wait for the file - polls every 20ms (one frame period) using async sleep.
         let reader = loop {
             if let Some(r) = CacheReader::open(cache_path, cache_reader_buffer_bytes) {
                 break r;
@@ -76,15 +68,15 @@ impl TrackReader {
     /// Try to read the next opus frame, applying effects if volume/EQ is active.
     ///
     /// Returns:
-    /// - `Some(frame)` — processed frame ready to send
-    /// - `None` — no frame available right now (caller should wait on progress.notify)
+    /// - `Some(frame)` - processed frame ready to send
+    /// - `None` - no frame available right now (caller should wait on progress.notify)
     ///
     /// The caller must check `progress.encoding_done` to distinguish
     /// "no frame yet" from "track finished".
     pub fn next_frame(&mut self) -> Option<Vec<u8>> {
         let available = self.progress.frames_written.load(Ordering::Acquire);
         if self.reader.frames_read() >= available {
-            return None; // caught up — caller decides if EOF or wait
+            return None; // caught up - caller decides if EOF or wait
         }
 
         let raw = self.reader.read_frame()?;

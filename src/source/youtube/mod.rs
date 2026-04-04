@@ -78,7 +78,7 @@ impl AudioSource for YouTubeSource {
             )));
         }
 
-        // Spawn yt-dlp — bytes start flowing to the stream immediately.
+        // Spawn yt-dlp - bytes start flowing to the stream immediately.
         ytdlp::spawn_audio_stream(&self.yt_dlp_path, url, self.cookies_path.as_deref()).await
     }
 

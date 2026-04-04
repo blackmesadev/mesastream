@@ -1,8 +1,3 @@
-//! Opus codec, source probing, and resampling utilities.
-//!
-//! All PCM handling is f32 — Opus `encode_float`/`decode_float` handle
-//! quantisation internally, avoiding a lossy i16 round-trip.
-
 use std::io::Read;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -25,7 +20,7 @@ use super::{MAX_OPUS_FRAME, PCM_FRAME_SAMPLES};
 
 /// Reusable Opus encoder/decoder pair.
 ///
-/// The decoder is optional — only allocated when effects processing is needed.
+/// The decoder is optional - only allocated when effects processing is needed.
 /// Entire pipeline uses f32; Opus `encode_float` / `decode_float` handle
 /// quantisation internally.
 pub struct OpusCodec {
@@ -110,7 +105,7 @@ pub fn probe_source(
 /// Packet → decode → resample(f32) → per-frame callback → Opus encode → emit.
 ///
 /// The entire pipeline stays f32. For 48 kHz stereo sources (YouTube) frames
-/// are encoded directly from the decoder's output slice — zero extra
+/// are encoded directly from the decoder's output slice - zero extra
 /// allocation. Non-48 kHz sources (e.g. SoundCloud 44.1 kHz) are linearly
 /// resampled into a scratch buffer first.
 ///
@@ -131,7 +126,7 @@ pub fn transcode_loop(
     let mut packet_errors = 0u32;
     let (mut frames, mut bytes) = (0u64, 0u64);
     // Cached once from the first successfully decoded packet.
-    // `is_native` = true means 48 kHz stereo —  no resample needed.
+    // `is_native` = true means 48 kHz stereo -  no resample needed.
     let mut stream_fmt: Option<(u32, usize, bool)> = None; // (rate, channels, is_native)
 
     loop {

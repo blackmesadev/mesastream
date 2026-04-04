@@ -1,9 +1,3 @@
-//! Encoder task: source → decode → resample → Opus encode → cache file.
-//!
-//! Runs inside `spawn_blocking` at full speed (bounded only by source I/O +
-//! CPU). Progress is published via `EncoderProgress` so the cache reader can
-//! follow the write head in real time.
-
 use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -20,8 +14,8 @@ use super::{
 ///
 /// Writes opus frames to `cache_path` in the `[u16 LE size][data]` format.
 /// Returns `(progress, duration_rx)`:
-///   - `progress` — shared counters the cache reader polls
-///   - `duration_rx` — fires with `duration_ms` when encoding completes
+/// - `progress` - shared counters the cache reader polls
+/// - `duration_rx` - fires with `duration_ms` when encoding completes
 pub fn spawn(
     reader: Box<dyn Read + Send + Sync + 'static>,
     cache_path: PathBuf,
@@ -46,7 +40,7 @@ pub fn spawn(
     (progress, duration_rx)
 }
 
-/// Blocking encoder body — runs inside `spawn_blocking`.
+/// Blocking encoder body - runs inside `spawn_blocking`.
 fn run(
     reader: Box<dyn Read + Send + Sync + 'static>,
     cache_path: &PathBuf,

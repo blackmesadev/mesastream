@@ -12,7 +12,7 @@ use crate::{
     dave::DaveEncryptor,
     errors::{AppError, AppResult},
     models::VoiceBridgePayloadDto,
-    voice_gateway,
+    voice,
 };
 
 enum Cipher {
@@ -122,7 +122,7 @@ impl EncryptedUdpSender {
     ///
     /// Packet layout (rtpsize modes):
     /// ```text
-    ///   RTP header (12) | ciphertext+tag | 4-byte nonce counter (BE)
+    /// RTP header (12) | ciphertext+tag | 4-byte nonce counter (BE)
     /// ```
     /// The RTP header doubles as the AEAD additional authenticated data (AAD).
     ///
@@ -176,7 +176,7 @@ impl EncryptedUdpSender {
 /// Mesastream re-runs the voice gateway handshake and replaces this transport
 /// atomically, so playback is uninterrupted.
 ///
-/// `Clone` is cheap — the inner sender is reference-counted.
+/// `Clone` is cheap - the inner sender is reference-counted.
 #[derive(Clone, Default)]
 pub struct DiscordTransport {
     sender: Option<Arc<EncryptedUdpSender>>,
@@ -189,7 +189,7 @@ impl DiscordTransport {
     /// Runs the Discord Voice Gateway handshake and establishes the UDP transport.
     #[instrument(skip(payload), fields(guild_id = %payload.guild_id, player_id = %payload.player_id))]
     pub async fn connect(payload: &VoiceBridgePayloadDto) -> AppResult<Self> {
-        let session = voice_gateway::connect(payload).await?;
+        let session = voice::connect(payload).await?;
 
         let sender = EncryptedUdpSender::connect(
             session.server_addr,

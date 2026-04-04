@@ -1,12 +1,3 @@
-//! WebSocket endpoint for broadcasting real-time player events to connected
-//! clients (e.g. Black Mesa).
-//!
-//! Route: `GET /ws`
-//!
-//! The server sends [`MesastreamEvent`] JSON frames and periodic Ping frames
-//! to detect dead clients.  Clients are expected to reply with Pong.
-//! Client → server text messages are logged but currently unused.
-
 use std::time::Duration;
 
 use actix_web::{web, HttpRequest, HttpResponse};
@@ -65,7 +56,7 @@ pub async fn ws_handler(
                             }
                         }
                         Err(broadcast::error::RecvError::Lagged(n)) => {
-                            warn!(missed = n, "ws client lagged — dropped events");
+                            warn!(missed = n, "ws client lagged - dropped events");
                         }
                         Err(broadcast::error::RecvError::Closed) => break,
                     }
@@ -82,7 +73,7 @@ pub async fn ws_handler(
                             debug!(peer = %peer, msg = %text, "ws client text message");
                         }
                         Some(Ok(Message::Close(_))) | None => break,
-                        _ => {} // binary, pong — ignore
+                        _ => {} // binary, pong - ignore
                     }
                 }
                 // Server-side heartbeat ping

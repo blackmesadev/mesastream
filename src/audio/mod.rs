@@ -1,18 +1,3 @@
-//! Audio pipeline: source → encoder → cache file → reader → discord.
-//!
-//! # Module layout
-//!
-//! | Module    | Responsibility |
-//! |-----------|---------------------------------------------------|
-//! | `codec`   | Opus encode/decode, source probing, resampling |
-//! | `cache`   | Cache file I/O (`CacheWriter`, `CacheReader`) |
-//! | `effects` | Volume scaling, 3-band parametric EQ, batch processing |
-//! | `encoder` | Blocking encode task (source → opus → cache file) |
-//! | `reader`  | Blocking playback reader (cache → effects → discord) |
-//!
-//! The top-level `AudioPipeline` ties everything together, providing the
-//! public API consumed by `player.rs`.
-
 pub mod cache;
 pub mod codec;
 pub mod effects;
@@ -140,10 +125,10 @@ impl PlaybackEffects {
 /// Top-level audio pipeline orchestrator.
 ///
 /// Provides the interface consumed by `PlayerManager`:
-/// - `open_stream()` — bridge an async `ByteStream` into a sync reader
-/// - `spawn_encoder()` — launch encoder task → cache file
-/// - `cache_path()` — build cache file path for a cache key
-/// - `bitrate_kbps()` — configured opus bitrate
+/// - `open_stream()` - bridge an async `ByteStream` into a sync reader
+/// - `spawn_encoder()` - launch encoder task → cache file
+/// - `cache_path()` - build cache file path for a cache key
+/// - `bitrate_kbps()` - configured opus bitrate
 #[derive(Clone)]
 pub struct AudioPipeline {
     settings: Arc<Settings>,
@@ -195,7 +180,7 @@ impl AudioPipeline {
     ) -> (Arc<EncoderProgress>, tokio::sync::oneshot::Receiver<u64>) {
         let cache_path =
             PathBuf::from(&self.settings.audio_cache_path).join(format!("{cache_key}.{CACHE_EXT}"));
-        let bitrate = self.settings.ffmpeg_bitrate_kbps;
+        let bitrate = self.settings.encoding_bitrate;
         encoder::spawn(
             reader,
             cache_path,
@@ -206,6 +191,6 @@ impl AudioPipeline {
 
     /// The configured Opus bitrate (kbps) for effects processing.
     pub fn bitrate_kbps(&self) -> u32 {
-        self.settings.ffmpeg_bitrate_kbps
+        self.settings.encoding_bitrate
     }
 }

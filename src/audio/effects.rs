@@ -1,9 +1,3 @@
-//! Audio effects: volume scaling and 3-band parametric EQ.
-//!
-//! `EffectsProcessor` owns an `OpusCodec` and an `EqFilterBank` and provides
-//! the batch decode→effects→re-encode pipeline. Biquad delay-line state is
-//! persistent across batches so the EQ doesn't click at frame boundaries.
-
 use crate::{errors::AppResult, models::EqualizerSettings};
 
 use super::codec::OpusCodec;
@@ -152,7 +146,7 @@ impl EqFilterBank {
 /// the whole buffer, then re-encodes per-frame.
 ///
 /// This amortises filter-coefficient checks and volume comparisons over the
-/// batch, improves CPU cache utilisation, and — critically — preserves biquad
+/// batch, improves CPU cache utilisation, and - critically - preserves biquad
 /// delay-line continuity across frame boundaries.
 pub struct EffectsProcessor {
     codec: OpusCodec,

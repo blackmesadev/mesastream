@@ -704,7 +704,7 @@ components:
         reason:
           type: string
       required: [type, guild_id, player_id, reason]
-      description: Voice transport lost — client should leave/rejoin for fresh credentials
+      description: Voice transport lost - client should leave/rejoin for fresh credentials
 
     WSEventGoodbye:
       type: object
@@ -713,7 +713,7 @@ components:
           type: string
           const: Goodbye
       required: [type]
-      description: Server shutting down — client should reconnect
+      description: Server shutting down - client should reconnect
 
     EqualizerSettings:
       type: object

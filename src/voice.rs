@@ -75,7 +75,7 @@ pub struct VoiceGatewaySession {
     pub dave: Option<DaveEncryptor>,
     /// Becomes `false` when the voice-gateway WebSocket keepalive task exits
     /// (Discord closed the session, network error, etc.).  The UDP transport is
-    /// dead once this is false — Discord silently drops any RTP we send.
+    /// dead once this is false - Discord silently drops any RTP we send.
     pub ws_alive: Arc<AtomicBool>,
     /// Sender for Speaking state updates. Send `true` to signal speaking, `false` for silent.
     pub speaking_tx: tokio::sync::mpsc::UnboundedSender<bool>,
@@ -95,14 +95,14 @@ const DAVE_MLS_TIMEOUT: Duration = Duration::from_secs(5);
 /// the negotiated session details needed to build a `VoiceUdpConnection`.
 ///
 /// Steps per the Discord Voice Gateway v8 + DAVE spec v1.1.4:
-///  1. WS connect → receive Hello (op 8) → start heartbeat (v8 format with seq_ack)
-///  2. Send Identify (op 0) with `max_dave_protocol_version = 1`
-///  3. Receive Ready (op 2)
-///  4. IP Discovery via UDP
-///  5. Send Select Protocol (op 1) with `dave_protocol_version`
-///  6. Receive Session Description (op 4); `d.dave_protocol_version` signals DAVE active.
-///     If DAVE: send binary KeyPackage (op 26), await binary Welcome (op 30).
-///  6b. If DAVE: process Welcome → send ready_for_transition (op 23) → DaveEncryptor
+/// 1. WS connect → receive Hello (op 8) → start heartbeat (v8 format with seq_ack)
+/// 2. Send Identify (op 0) with `max_dave_protocol_version = 1`
+/// 3. Receive Ready (op 2)
+/// 4. IP Discovery via UDP
+/// 5. Send Select Protocol (op 1) with `dave_protocol_version`
+/// 6. Receive Session Description (op 4); `d.dave_protocol_version` signals DAVE active.
+///   If DAVE: send binary KeyPackage (op 26), await binary Welcome (op 30).
+/// 6b. If DAVE: process Welcome → send ready_for_transition (op 23) → DaveEncryptor
 #[instrument(skip(payload), fields(guild_id = %payload.guild_id, user_id = %payload.user_id))]
 pub async fn connect(payload: &VoiceBridgePayloadDto) -> AppResult<VoiceGatewaySession> {
     info!(gateway_url = %payload.gateway_url, "connecting to Discord Voice Gateway");
@@ -278,14 +278,14 @@ pub async fn connect(payload: &VoiceBridgePayloadDto) -> AppResult<VoiceGatewayS
     //
     // Two DAVE paths after SessionDescription (op 4):
     //
-    //  A) Sole/first member — server sends op 25 (ExternalSender) + op 27
-    //     (Proposals) expecting the client to commit.  Client creates a fresh
-    //     MLS group, self-update-commits, and sends op 28 (CommitWelcome).
-    //     No op 30 Welcome arrives; the encryptor is derived from the new epoch.
+    // A) Sole/first member - server sends op 25 (ExternalSender) + op 27
+    //   (Proposals) expecting the client to commit.  Client creates a fresh
+    //   MLS group, self-update-commits, and sends op 28 (CommitWelcome).
+    //   No op 30 Welcome arrives; the encryptor is derived from the new epoch.
     //
-    //  B) Joining an existing group — an existing member commits and Discord
-    //     delivers op 30 (Welcome) directly to the new joiner.  Client calls
-    //     MlsGroup::new_from_welcome to join and derive the encryptor.
+    // B) Joining an existing group - an existing member commits and Discord
+    //   delivers op 30 (Welcome) directly to the new joiner.  Client calls
+    //   MlsGroup::new_from_welcome to join and derive the encryptor.
     //
     // Binary server→client framing: [seq_hi][seq_lo][opcode][body...].
     // For op 30 Welcome body:        [tid_hi][tid_lo][Welcome TLS bytes...].
@@ -448,13 +448,13 @@ pub async fn connect(payload: &VoiceBridgePayloadDto) -> AppResult<VoiceGatewayS
                                                             dave_handshake = Some(hs);
                                                         }
                                                         Err(e) => {
-                                                            warn!("DAVE KeyPackage send failed: {e} — E2EE unavailable");
+                                                            warn!("DAVE KeyPackage send failed: {e} - E2EE unavailable");
                                                             dave_version = 0; // fall back
                                                         }
                                                     }
                                                 }
                                                 Err(e) => {
-                                                    warn!("DAVE KeyPackage generation failed: {e} — E2EE unavailable");
+                                                    warn!("DAVE KeyPackage generation failed: {e} - E2EE unavailable");
                                                     dave_version = 0;
                                                 }
                                             }
@@ -477,15 +477,15 @@ pub async fn connect(payload: &VoiceBridgePayloadDto) -> AppResult<VoiceGatewayS
                                         let epoch = v["d"]["epoch"].as_u64().unwrap_or(0);
                                         let _ver   = v["d"]["protocol_version"].as_u64().unwrap_or(0);
                                         if epoch == 1 && dave_version > 0 {
-                                            warn!("DAVE prepare_epoch epoch=1 (group re-creation) — not yet handled");
+                                            warn!("DAVE prepare_epoch epoch=1 (group re-creation) - not yet handled");
                                         }
                                     }
                                     OP_DAVE_MLS_INVALID_COMMIT_WELCOME => {
                                         let tid = v["d"]["transition_id"].as_u64().unwrap_or(0);
-                                        warn!(tid, "DAVE invalid_commit_welcome — local MLS reset needed");
+                                        warn!(tid, "DAVE invalid_commit_welcome - local MLS reset needed");
                                     }
 
-                                    // Routine voice gateway status ops — safe to ignore.
+                                    // Routine voice gateway status ops - safe to ignore.
                                     OP_SPEAKING | OP_CLIENTS_CONNECT | OP_CLIENT_DISCONNECT => {}
 
                                     // Op 6 = HeartbeatAck (server echoes heartbeat nonce).
@@ -573,11 +573,11 @@ pub async fn connect(payload: &VoiceBridgePayloadDto) -> AppResult<VoiceGatewayS
                                                     match ws.send(Message::Binary(bin.into())).await {
                                                         Ok(_) => {}
                                                         Err(e) => {
-                                                            warn!("DAVE op 28 send failed: {e} — E2EE unavailable");
+                                                            warn!("DAVE op 28 send failed: {e} - E2EE unavailable");
                                                         }
                                                     }
                                                     // Path A (sole member): after sending CommitWelcome the
-                                                    // MLS session is complete — derive the encryptor now.
+                                                    // MLS session is complete - derive the encryptor now.
                                                     // Without this, `dave_material_ready` stays false and
                                                     // the loop spins until the 30s outer timeout fires.
                                                     if dave_encryptor_inner.is_none() {
@@ -596,7 +596,7 @@ pub async fn connect(payload: &VoiceBridgePayloadDto) -> AppResult<VoiceGatewayS
                                                     debug!("DAVE proposals produced no commit (nothing to send)");
                                                 }
                                                 Err(e) => {
-                                                    warn!("DAVE process_proposals failed: {e} — E2EE unavailable");
+                                                    warn!("DAVE process_proposals failed: {e} - E2EE unavailable");
                                                 }
                                             }
                                         }
@@ -656,7 +656,7 @@ pub async fn connect(payload: &VoiceBridgePayloadDto) -> AppResult<VoiceGatewayS
             tokio::select! {
                 biased;
 
-                // Inbound WS messages — process seq_ack updates and close frames.
+                // Inbound WS messages - process seq_ack updates and close frames.
                 msg = ws_rx.next() => {
                     match msg {
                         Some(Ok(Message::Text(text))) => {
@@ -713,7 +713,7 @@ pub async fn connect(payload: &VoiceBridgePayloadDto) -> AppResult<VoiceGatewayS
                 }
             }
         }
-        warn!("voice gateway keepalive stopped (heartbeat send failed) — transport is dead");
+        warn!("voice gateway keepalive stopped (heartbeat send failed) - transport is dead");
         ws_alive_task.store(false, Ordering::Relaxed);
     });
 

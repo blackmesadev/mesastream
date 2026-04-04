@@ -255,7 +255,7 @@ impl SoundcloudClient {
             if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
                 tracing::warn!(
                     status = %status,
-                    "SoundCloud auth error — client_id may be stale"
+                    "SoundCloud auth error - client_id may be stale"
                 );
                 return Err(AppError::SourceUnavailable(format!(
                     "soundcloud auth error ({}): {}",
@@ -311,7 +311,7 @@ impl SoundcloudClient {
         match self.try_resolve_stream(&transcoding, &client_id).await {
             Ok(url) => Ok((url, transcoding)),
             Err(_) => {
-                // Auth/request failure — invalidate cached id, fetch a fresh one, retry once
+                // Auth/request failure - invalidate cached id, fetch a fresh one, retry once
                 tracing::info!("Retrying SoundCloud stream with refreshed client_id");
                 self.invalidate_client_id().await;
                 let new_client_id = self.refresh_client_id().await?;

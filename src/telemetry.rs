@@ -73,7 +73,7 @@ pub fn init(
     });
     let stdout_layer = tracing_subscriber::fmt::layer().with_filter(stdout_filter);
 
-    // OTLP (OpenObserve): debug and above — debug! logs go here only.
+    // OTLP (OpenObserve): debug and above - debug! logs go here only.
     let otlp_filter = EnvFilter::new(
         "debug,h2=off,hyper=off,tower=off,symphonia_bundle_mp3=error,symphonia_format_ogg=error",
     );

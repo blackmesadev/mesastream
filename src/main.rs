@@ -4,13 +4,13 @@ mod auth;
 mod cache;
 mod config;
 mod dave;
-mod discord_transport;
+mod discord;
 mod errors;
 mod models;
 mod player;
 mod source;
 mod telemetry;
-mod voice_gateway;
+mod voice;
 mod ws;
 
 use actix_web::{web, App, HttpServer};
@@ -71,7 +71,7 @@ async fn main() -> AppResult<()> {
             .app_data(web::Data::new(token.clone()))
             .app_data(web::Data::new(event_tx_for_server.clone()))
             .wrap(TracingLogger::default())
-            // WS endpoint — outside bearer-auth scope so clients can connect
+            // WS endpoint - outside bearer-auth scope so clients can connect
             // without an Authorization header (runs on a private network).
             .route("/ws", web::get().to(ws::ws_handler))
             // All other routes require Bearer authentication.

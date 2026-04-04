@@ -2,7 +2,7 @@
 //!
 //! All process I/O is fully async via `tokio::process`. The `spawn_audio_stream`
 //! function returns a `ByteStream` that delivers raw audio data as yt-dlp
-//! outputs it — no intermediate files, no sync blocking.
+//! outputs it - no intermediate files, no sync blocking.
 
 use std::{collections::HashMap, process::Stdio};
 
@@ -21,7 +21,7 @@ use crate::source::ByteStream;
 
 const YT_EXTRACTOR_ARGS_ANDROID: &str = "youtube:player_client=android";
 
-/// Size of each read from yt-dlp stdout (32 KiB — matches typical TCP window).
+/// Size of each read from yt-dlp stdout (32 KiB - matches typical TCP window).
 const STDOUT_READ_BUF: usize = 32_768;
 
 /// Channel capacity for stdout → stream bridge.
@@ -106,7 +106,7 @@ pub async fn fetch_and_parse_metadata<T: DeserializeOwned>(
                 status_code = output.status.code(),
                 http_error = status,
                 stderr = %trim_for_log(stderr_str, 500),
-                "yt-dlp received HTTP 4xx error — content unavailable or rate-limited"
+                "yt-dlp received HTTP 4xx error - content unavailable or rate-limited"
             );
             return Err(AppError::SourceUnavailable(format!(
                 "{source} returned HTTP {status} (likely rate-limited or blocked)"
@@ -149,7 +149,7 @@ pub async fn fetch_and_parse_metadata<T: DeserializeOwned>(
 /// Spawn yt-dlp for audio streaming. Returns an async `ByteStream` that
 /// delivers raw audio data as yt-dlp outputs it.
 ///
-/// The child process is managed internally — it is killed when the stream
+/// The child process is managed internally - it is killed when the stream
 /// is dropped (sender side closes, the stdout task cleans up).
 #[tracing::instrument(skip(yt_dlp_path, source_url, cookies_path))]
 pub async fn spawn_audio_stream(
