@@ -4,13 +4,10 @@ mesastream is the audio streaming service intended for use by black mesa. contro
 
 ## with Docker
 
-```bash
-docker build -f mesastream/Dockerfile -t mesastream:local .
-```
-
-start the container with:
+Build and run from the mesastream directory:
 
 ```bash
+docker build -t mesastream . && \
 docker run --rm \
 	--name mesastream \
 	-p 8070:8070 \
@@ -18,7 +15,7 @@ docker run --rm \
 	-e REDIS_URI="redis://host.docker.internal:6379" \
 	-e OTLP_ENDPOINT="http://host.docker.internal:4318/v1/traces" \
 	-v "$(pwd)/mesastream/cache:/var/cache/mesastream/audio" \
-	mesastream:local
+	mesastream
 ```
 
 ## api spec
