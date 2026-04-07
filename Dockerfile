@@ -11,14 +11,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # COPY ./lib /app/lib
 
-COPY ./mesastream/Cargo.toml ./mesastream/Cargo.lock ./
-COPY ./mesastream/src/main.rs ./src/main.rs
+COPY ./Cargo.toml ./Cargo.lock ./
+COPY ./src/main.rs ./src/main.rs
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     cargo fetch
 
-COPY ./mesastream/src ./src
+COPY ./src ./src
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
